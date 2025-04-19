@@ -1,41 +1,54 @@
 import pandas as pd
 
-def generate_features(data, weather_data=None, matchup_data=None, odds_data=None):
-    """Generate model features from the combined datasets."""
+def generate_features(data: pd.DataFrame) -> pd.DataFrame:
     features = pd.DataFrame()
 
-    # Basic batter stats
-    features['batter'] = data['batter']
-    features['team'] = data['team']
-    features['opponent'] = data['opponent']
-    features['pitcher'] = data['pitcher']
-    features['hr'] = data['hr']
-    features['season_hr'] = data['season_hr']
-    features['avg'] = data['avg']
-    features['slg'] = data['slg']
-    features['ops'] = data['ops']
-    features['iso'] = data['iso']
-    features['barrel_rate'] = data['barrel_rate']
-    features['hard_hit_rate'] = data['hard_hit_rate']
-    features['fly_ball_rate'] = data['fly_ball_rate']
+    # Debug: Print available columns to trace issues
+    print("Available columns in input data:", data.columns.tolist())
 
-    # Weather features (if provided)
-    if weather_data is not None:
-        features['temperature'] = weather_data.get('temperature', 70)
-        features['wind_speed'] = weather_data.get('wind_speed', 0)
-        features['wind_direction'] = weather_data.get('wind_direction', 'None')
-        features['humidity'] = weather_data.get('humidity', 50)
+    # Safe column access using get() or fallback values
+    features['batter'] = data.get('batter', data.get('player', 'unknown'))
+    features['pitcher'] = data.get('pitcher', 'unknown')
+    features['batter_hand'] = data.get('batter_hand', 'R')
+    features['pitcher_hand'] = data.get('pitcher_hand', 'R')
+    
+    # Matchup stats
+    features['vs_pitcher_avg'] = data.get('vs_pitcher_avg', 0.250)
+    features['vs_pitcher_hr'] = data.get('vs_pitcher_hr', 0)
 
-    # Matchup features (if provided)
-    if matchup_data is not None:
-        features['batter_vs_pitcher_hr'] = matchup_data.get('hr', 0)
-        features['batter_vs_pitcher_avg'] = matchup_data.get('avg', 0.0)
-        features['batter_vs_pitcher_slg'] = matchup_data.get('slg', 0.0)
-        features['batter_vs_pitcher_ops'] = matchup_data.get('ops', 0.0)
+    # Season stats
+    features['season_hr'] = data.get('season_hr', 0)
+    features['season_iso'] = data.get('season_iso', 0.0)
+    features['season_slg'] = data.get('season_slg', 0.0)
+    features['season_ops'] = data.get('season_ops', 0.0)
 
-    # Sportsbook odds (if provided)
-    if odds_data is not None:
-        features['hr_odds'] = odds_data.get('hr_odds', None)
-        features['implied_prob'] = odds_data.get('implied_prob', None)
+    # Weather features
+    features['wind_speed'] = data.get('wind_speed', 0)
+    features['wind_direction'] = data.get('wind_direction', 'None')
+    features['temperature'] = data.get('temperature', 70)
+    features['humidity'] = data.get('humidity', 50)
+    features['elevation'] = data.get('elevation', 0)
+
+    # Park factor or adjustments
+    features['ballpark'] = data.get('ballpark', 'unknown')
+    features['hr_park_factor'] = data.get('hr_park_factor', 1.0)
+
+    # Sportsbook odds
+    features['hr_odds'] = data.get('hr_odds', None)
+
+    # Combine into a consistent format
+    features.fillna({
+        'vs_pitcher_avg': 0.250,
+        'vs_pitcher_hr': 0,
+        'season_hr': 0,
+        'season_iso': 0.0,
+        'season_slg': 0.0,
+        'season_ops': 0.0,
+        'wind_speed': 0,
+        'temperature': 70,
+        'humidity': 50,
+        'elevation': 0,
+        'hr_park_factor': 1.0,
+    }, inplace=True)
 
     return features
