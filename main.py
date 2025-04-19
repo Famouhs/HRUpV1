@@ -10,7 +10,7 @@ st.title("MLB Home Run Predictor")
 # Get odds and prediction data
 try:
     odds_df = get_odds_data()
-    results_df = predict_home_runs(odds_df)
+    results_df = predict_home_runs(odds_df)  # ✅ FIXED: pass odds_df as argument
 except Exception as e:
     st.error(f"Error loading data: {e}")
     st.stop()
@@ -26,7 +26,6 @@ results_df = results_df.sort_values(by='predicted_hr_prob', ascending=False).res
 
 # Display table with styling
 def highlight_top(row):
-    # Highlight the top 3 rows
     if row.name < 3:
         return ['background-color: #ffd700'] * len(row)
     return [''] * len(row)
