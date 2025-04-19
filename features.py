@@ -1,59 +1,71 @@
+# hrupv1/model/features.py
+
 import pandas as pd
 
-def generate_features(matchups_df: pd.DataFrame,
-                      odds_df: pd.DataFrame,
-                      weather_df: pd.DataFrame) -> pd.DataFrame:
-    # Merge all inputs into one DataFrame
-    df = matchups_df.copy()
+def create_features(statcast_df: pd.DataFrame, matchup_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create engineered features by merging statcast and matchup data, 
+    with fallback to handedness-level stats if individual matchup is missing.
 
-    # Merge in sportsbook odds if available
-    if not odds_df.empty:
-        df = df.merge(odds_df, on='batter', how='left')
+    Parameters:
+    - statcast_df: pd.DataFrame - Statcast batted ball data
+    - matchup_df: pd.DataFrame - Matchup-level stats (batter vs pitcher)
 
-    # Merge in weather info if available
-    if not weather_df.empty:
-        df = df.merge(weather_df, on='ballpark', how='left')
+    Returns:
+    - df: pd.DataFrame - Feature-enriched data
+    """
+    df = statcast_df.copy()
 
-    features = pd.DataFrame()
+    required_cols_statcast = {"batter", "pitcher", "stand", "p_throws", "home_team", "team"}
+    required_cols_matchup = {"batter", "pitcher"}
 
-    print("Columns in merged input:", df.columns.tolist())
+    # Check required columns
+    missing_statcast = required_cols_statcast - set(df.columns)
+    missing_matchup = required_cols_matchup - set(matchup_df.columns)
 
-    features['batter'] = df.get('batter', df.get('player', 'unknown'))
-    features['pitcher'] = df.get('pitcher', 'unknown')
-    features['batter_hand'] = df.get('batter_hand', 'R')
-    features['pitcher_hand'] = df.get('pitcher_hand', 'R')
-    
-    features['vs_pitcher_avg'] = df.get('vs_pitcher_avg', 0.250)
-    features['vs_pitcher_hr'] = df.get('vs_pitcher_hr', 0)
+    if missing_statcast:
+        raise ValueError(f"❌ Missing required columns in statcast_df: {missing_statcast}")
+    if missing_matchup:
+        raise ValueError(f"❌ Missing required columns in matchup_df: {missing_matchup}")
 
-    features['season_hr'] = df.get('season_hr', 0)
-    features['season_iso'] = df.get('season_iso', 0.0)
-    features['season_slg'] = df.get('season_slg', 0.0)
-    features['season_ops'] = df.get('season_ops', 0.0)
+    # Merge on batter + pitcher
+    df = df.merge(matchup_df, on=["batter", "pitcher"], how="left", suffixes=("", "_matchup"))
 
-    features['wind_speed'] = df.get('wind_speed', 0)
-    features['wind_direction'] = df.get('wind_direction', 'None')
-    features['temperature'] = df.get('temperature', 70)
-    features['humidity'] = df.get('humidity', 50)
-    features['elevation'] = df.get('elevation', 0)
+    # Identify which rows failed to match
+    missing_rows = df["some_key_stat_column"].isna() if "some_key_stat_column" in df.columns else df["batter"].isna()
 
-    features['ballpark'] = df.get('ballpark', 'unknown')
-    features['hr_park_factor'] = df.get('hr_park_factor', 1.0)
+    if missing_rows.any():
+        print(f"⚠️ {missing_rows.sum()} rows missing batter-pitcher matchup. Using handedness fallback...")
 
-    features['hr_odds'] = df.get('hr_odds', None)
+        # Create handedness key for statcast and matchup
+        df["bp_hand"] = df["stand"] + "_" + df["p_throws"]
+        matchup_df["bp_hand"] = matchup_df.get("bp_hand") or (matchup_df["stand"] + "_" + matchup_df["p_throws"])
 
-    features.fillna({
-        'vs_pitcher_avg': 0.250,
-        'vs_pitcher_hr': 0,
-        'season_hr': 0,
-        'season_iso': 0.0,
-        'season_slg': 0.0,
-        'season_ops': 0.0,
-        'wind_speed': 0,
-        'temperature': 70,
-        'humidity': 50,
-        'elevation': 0,
-        'hr_park_factor': 1.0,
-    }, inplace=True)
+        # Prepare handedness-level aggregates from matchup_df
+        handedness_df = matchup_df.groupby("bp_hand").mean().reset_index()
 
-    return features
+        # Merge handedness fallback data for missing rows
+        df = df.merge(handedness_df, on="bp_hand", how="left", suffixes=("", "_handed_fallback"))
+
+        # Fill nulls in original matchup stats with handedness fallback values
+        for col in matchup_df.columns:
+            if col not in ["batter", "pitcher", "bp_hand"]:
+                base = df[col]
+                fallback = df[f"{col}_handed_fallback"]
+                if col in df.columns and f"{col}_handed_fallback" in df.columns:
+                    df[col] = base.fillna(fallback)
+
+    # Feature: batter/pitcher hand matchup (e.g., "L_R")
+    df["batter_hand_pitcher_hand"] = df["stand"] + "_" + df["p_throws"]
+
+    # Feature: is the batter playing at home
+    df["is_home"] = (df["home_team"] == df["team"]).astype(int)
+
+    # Feature: launch interaction
+    if "launch_angle" in df.columns and "launch_speed" in df.columns:
+        df["launch_angle_speed"] = df["launch_angle"] * df["launch_speed"]
+
+    # Fill remaining NaNs
+    df.fillna(0, inplace=True)
+
+    return df
