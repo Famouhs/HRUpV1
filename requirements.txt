@@ -1,2 +1,5 @@
-streamlit
 pandas
+streamlit
+scikit-learn
+beautifulsoup4
+requests
