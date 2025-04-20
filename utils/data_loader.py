@@ -1,6 +1,11 @@
 import os
+import sys
 import pandas as pd
-from .features import generate_features  # <-- relative import
+
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from features import generate_features  # absolute import after path fix
 
 def load_all_data(data_dir: str = "data") -> pd.DataFrame:
     if not os.path.exists(data_dir):
