@@ -2,10 +2,14 @@ import os
 import sys
 import pandas as pd
 
-# Add project root to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add project root to sys.path dynamically
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(current_dir, ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
-from features import generate_features  # absolute import after path fix
+# Now import works as expected
+from features import generate_features
 
 def load_all_data(data_dir: str = "data") -> pd.DataFrame:
     if not os.path.exists(data_dir):
