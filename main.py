@@ -1,31 +1,52 @@
+import sys
+import os
 import streamlit as st
 import pandas as pd
-from model.predictor import get_home_run_projections
-from utils.odds_scraper import get_odds_data
-from utils.weather_scraper import get_weather_data
-from utils.matchup_scraper import get_matchup_data
+
+# ✅ Add 'utils' to path to support absolute imports on Streamlit Cloud
+sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
+
 from utils.data_loader import load_all_data
+from utils.model import load_model, predict_home_runs  # Adjust if model.py is elsewhere
+from utils.display import style_projection_table  # Optional: for nice styling
 
-st.set_page_config(page_title="MLB Home Run Predictor", layout="wide")
+st.set_page_config(page_title="MLB Home Run Projections", layout="wide")
 
-st.title("💣 MLB Home Run Predictor")
-st.markdown("Powered by real Statcast data, matchup splits, weather, and sportsbook odds")
+def main():
+    st.title("💥 MLB Home Run AI Projections")
+    st.markdown("Real data. AI-powered predictions. Adjusted for matchups, weather, and park factors.")
 
-# Sidebar toggles
-use_weather = st.sidebar.checkbox("🌤️ Use Weather Effects", value=True)
-show_adjusted = st.sidebar.checkbox("📊 Show Adjusted Projections", value=True)
+    with st.spinner("Loading data..."):
+        data = load_all_data()
 
-# Load real data
-with st.spinner("🔄 Loading live data..."):
-    statcast_df = load_all_data()
-    odds_df = get_odds_data()
-    weather_df = get_weather_data() if use_weather else None
-    matchup_df = get_matchup_data()
+    if data is None or data.empty:
+        st.error("No data loaded. Please check your data sources.")
+        return
 
-# Get projections
-with st.spinner("🧠 Running projections..."):
-    projections = get_home_run_projections(statcast_df, odds_df, matchup_df, weather_df, use_weather)
+    # Show raw data toggle
+    if st.checkbox("Show raw input data"):
+        st.dataframe(data)
 
-# Show results
-st.subheader("Top Home Run Picks Today")
-st.dataframe(projections[['Player', 'Team', 'HR_Prob', 'HR_Odds', 'Stars', 'Matchup_Info', 'Weather_Effect']])
+    # Load trained model (or placeholder logic)
+    model = load_model()
+
+    with st.spinner("Predicting home runs..."):
+        predictions = predict_home_runs(data, model)
+
+    # Combine predictions into final table
+    result_df = data.copy()
+    result_df["HR_Probability"] = predictions
+    result_df = result_df.sort_values(by="HR_Probability", ascending=False)
+
+    # Optional: Style the table nicely
+    styled_df = style_projection_table(result_df) if "style_projection_table" in globals() else result_df
+
+    st.subheader("🔝 Top Home Run Picks Today")
+    st.dataframe(styled_df, use_container_width=True)
+
+    # Download option
+    csv = result_df.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download Projections", csv, "hr_projections.csv", "text/csv")
+
+if __name__ == "__main__":
+    main()
