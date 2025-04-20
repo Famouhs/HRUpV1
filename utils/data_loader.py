@@ -1,17 +1,8 @@
 import os
 import pandas as pd
-from utils.features import generate_features  # Updated for correct import path
+from .features import generate_features  # <-- relative import
 
 def load_all_data(data_dir: str = "data") -> pd.DataFrame:
-    """
-    Loads all CSV files from the given directory and generates features.
-
-    Args:
-        data_dir (str): Path to the directory containing input CSV files.
-
-    Returns:
-        pd.DataFrame: A combined DataFrame with features.
-    """
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory '{data_dir}' does not exist.")
 
